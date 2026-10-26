@@ -2,6 +2,43 @@
 
 DOMAIN = "diagral"
 BRAND = "Diagral"
+EQUIPMENT_CATEGORIES = (
+    "sensors",
+    "sirens",
+    "cameras",
+    "commands",
+    "transceivers",
+    "transmitters",
+)
+EQUIPMENT_FAULT_KEYS = (
+    "radio_alert",
+    "power_supply_alert",
+    "autoprotection_mechanical_alert",
+    "loop_alert",
+    "mask_alert",
+    "sensor_alert",
+    "media_gsm_alert",
+    "media_rtc_alert",
+    "media_adsl_alert",
+    "out_of_order_alert",
+    "main_power_supply_alert",
+    "secondary_power_supply_alert",
+    "default_media_alert",
+    "autoprotection_wired_alert",
+)
+EQUIPMENT_FIRMWARE_FIELDS = (
+    "box",
+    "central",
+    "centralradio",
+    "plugknx",
+    "boxradio",
+    "plug",
+)
+EQUIPMENT_DEFAULT_FAULT_KEYS = (
+    "power_supply_alert",
+    "radio_alert",
+    "autoprotection_mechanical_alert",
+)
 # Bus event fired for every webhook; a public contract used in automations
 DIAGRAL_EVENT = "DIAGRAL_EVENT"
 # Dispatcher signals of a webhook: the global one is kept for existing listeners,
@@ -32,6 +69,23 @@ ALARMPANEL_CODE_MIN_LENGTH = 4
 ALARM_INTRUSION_CODES = frozenset({1130, 1139, 1141})
 
 DEFAULT_SCAN_INTERVAL = 300
+CLOCK_SKEW_THRESHOLD = 120
+FUTURE_TIMESTAMP_TOLERANCE = 5
+COMMUNICATION_STALE_SECONDS = DEFAULT_SCAN_INTERVAL * 2
+COMMUNICATION_STATES = (
+    "connected",
+    "cloud_unavailable",
+    "authentication_failed",
+    "pin_refused",
+    "clock_skew",
+    "invalid_response",
+    "timeout",
+    "network_error",
+    "stale",
+    "api_error",
+    "unknown",
+)
+LOCAL_DIAGNOSTIC_INTERVAL = 60
 # A transient read failure is retried with a longer deadline, after a longer
 # pause, and the whole refresh never runs into the next poll.
 READ_ATTEMPT_TIMEOUTS = (30, 45, 60)
@@ -62,6 +116,10 @@ STATUS_OFF = "off"
 STATUS_GROUP = "group"
 STATUS_TEMPO_GROUP = "tempo_group"
 STATUS_PRESENCE = "presence"
+ARMING_SOURCE_COMMAND = "command"
+ARMING_SOURCE_UNKNOWN = "unknown"
+ARMING_CONFIRMATION_DELAY = 1
+GROUP_STATES = ("disarmed", "arming", "armed", "unknown")
 # A command is never resent: past this deadline, one status read decides.
 COMMAND_TIMEOUT = 30
 
