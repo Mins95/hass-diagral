@@ -1,11 +1,13 @@
 """Tests for coordinator.py — progressive retries of Diagral reads."""
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from custom_components.diagral import coordinator as coordinator_module
+from custom_components.diagral.arming import ArmingTracker
 from custom_components.diagral.const import (
     PING_TIMEOUT,
     READ_ATTEMPT_TIMEOUTS,
@@ -39,6 +41,10 @@ def make_coordinator(data=OLD_DATA):
     """Return a coordinator whose API answers with valid data."""
     coordinator = object.__new__(DiagralDataUpdateCoordinator)
     coordinator.data = data
+    coordinator.hass = MagicMock()
+    coordinator.arming = ArmingTracker()
+    coordinator._arming_refresh_cancel = None
+    coordinator._arming_refresh_deadline = None
     coordinator.api = MagicMock()
     coordinator.api.ping = AsyncMock(return_value=SimpleNamespace(status="we're alive"))
     coordinator.api.get_configuration = AsyncMock(return_value=MagicMock(groups=[]))
@@ -118,7 +124,9 @@ class TestRetries:
         """A payload without a status keeps the previous data, without retry."""
         coordinator = make_coordinator()
         coordinator.api.get_system_status.return_value = None
-        assert await coordinator._async_update_data() is OLD_DATA
+        with pytest.raises(UpdateFailed, match="Invalid"):
+            await coordinator._async_update_data()
+        assert coordinator.data is OLD_DATA
         sleep.assert_not_awaited()
 
 
@@ -194,13 +202,26 @@ class TestOutageLogging:
         caplog.set_level(logging.INFO, logger="custom_components.diagral")
         coordinator = make_coordinator()
         coordinator.api.get_system_status.return_value = None
-        await coordinator._async_update_data()
+        with pytest.raises(UpdateFailed, match="Invalid"):
+            await coordinator._async_update_data()
 
         assert not caplog.records
 
 
 class TestHealth:
     """The coordinator keeps what the diagnostic entities report."""
+
+    async def test_invalid_payload_is_not_a_new_success(self, sleep):
+        """An old snapshot must not gain a fresh success timestamp."""
+        coordinator = make_coordinator()
+        previous = datetime(2026, 10, 25, tzinfo=UTC)
+        coordinator.last_success = previous
+        coordinator.api.get_system_status.return_value = None
+        with pytest.raises(UpdateFailed, match="Invalid"):
+            await coordinator._async_update_data()
+        assert coordinator.data is OLD_DATA
+        assert coordinator.last_success == previous
+        assert coordinator.last_error == "ValidationError"
 
     async def test_success_and_failure_are_recorded(self, sleep):
         """A read records its time on success, the error kind on failure."""
@@ -262,6 +283,99 @@ class TestHealth:
         assert coordinator.webhook_status == "connected"
         assert coordinator.last_webhook is not None
         assert coordinator.async_update_listeners.call_count == 2
+
+
+class TestArmingCoordinator:
+    """A single deadline callback asks for confirmation without changing state."""
+
+    def make_timed_coordinator(self):
+        """Return a coordinator with two groups and no scheduled call."""
+        return make_coordinator(
+            {
+                "system_status": SimpleNamespace(status="OFF", activated_groups=[]),
+                "alarm_config": SimpleNamespace(
+                    groups=[
+                        SimpleNamespace(index=1, output_delay=30),
+                        SimpleNamespace(index=2, output_delay=90),
+                    ]
+                ),
+            }
+        )
+
+    def test_command_records_real_group_delay_and_schedules_once(self):
+        """The selected group, not a hardcoded global value, supplies the delay."""
+        coordinator = self.make_timed_coordinator()
+        now = datetime(2026, 10, 26, 12, tzinfo=UTC)
+        returned = SimpleNamespace(status="TEMPO_GROUP", activated_groups=[])
+        with (
+            patch.object(coordinator_module.dt_util, "utcnow", return_value=now),
+            patch.object(coordinator_module, "async_call_later") as schedule,
+        ):
+            coordinator.async_record_command_result(
+                returned, started_at=now, target_groups=[1]
+            )
+            coordinator._async_schedule_arming_confirmation()
+        assert coordinator.arming.ends_at == now + timedelta(seconds=30)
+        assert coordinator.arming.target_groups == (1,)
+        schedule.assert_called_once_with(
+            coordinator.hass, 31, coordinator._async_arming_confirmation
+        )
+
+    def test_all_groups_uses_longest_configured_delay(self):
+        """A full arm command accounts for each configured group's delay."""
+        coordinator = self.make_timed_coordinator()
+        now = datetime(2026, 10, 26, 12, tzinfo=UTC)
+        with patch.object(coordinator_module, "async_call_later"):
+            coordinator.async_record_command_result(
+                SimpleNamespace(status="TEMPO_GROUP"), started_at=now, target_groups=[]
+            )
+        assert coordinator.arming.duration_seconds == 90
+        assert coordinator.arming.target_groups == (1, 2)
+
+    def test_disarm_cancels_pending_confirmation(self):
+        """A cancelled exit delay cannot run an obsolete callback later."""
+        coordinator = self.make_timed_coordinator()
+        cancel = MagicMock()
+        now = datetime(2026, 10, 26, 12, tzinfo=UTC)
+        with (
+            patch.object(coordinator_module, "async_call_later", return_value=cancel),
+            patch.object(coordinator_module.dt_util, "utcnow", return_value=now),
+        ):
+            coordinator.async_record_command_result(
+                SimpleNamespace(status="TEMPO_GROUP"), started_at=now, target_groups=[1]
+            )
+            coordinator.async_record_command_result(
+                SimpleNamespace(status="OFF"), started_at=now, clear_arming=True
+            )
+        cancel.assert_called_once()
+        assert coordinator.arming.ends_at is None
+
+    async def test_deadline_only_requests_a_single_read(self):
+        """Expiry never marks the central armed or issues another command."""
+        coordinator = self.make_timed_coordinator()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.async_update_listeners = MagicMock()
+        tasks = []
+
+        def create_task(coroutine, name):
+            tasks.append(asyncio.create_task(coroutine))
+
+        coordinator.hass.async_create_task.side_effect = create_task
+        now = datetime(2026, 10, 26, 12, tzinfo=UTC)
+        returned = SimpleNamespace(status="TEMPO_GROUP", activated_groups=[])
+        with (
+            patch.object(coordinator_module, "async_call_later") as schedule,
+            patch.object(coordinator_module.dt_util, "utcnow", return_value=now),
+        ):
+            coordinator.async_record_command_result(
+                returned, started_at=now, target_groups=[1]
+            )
+            coordinator._async_arming_confirmation(now + timedelta(seconds=31))
+            coordinator._async_schedule_arming_confirmation()
+        await asyncio.gather(*tasks)
+        coordinator.async_request_refresh.assert_awaited_once()
+        assert coordinator.arming.is_arming is True
+        assert schedule.call_count == 1
 
 
 def make_device_coordinator(sw_version: str | None) -> tuple[MagicMock, MagicMock]:

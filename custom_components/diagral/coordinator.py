@@ -9,13 +9,16 @@ from pydiagral.api import DiagralAPI
 from pydiagral.exceptions import ClientError, DiagralAPIError, ServerError
 from pydiagral.models import AlarmConfiguration, Anomalies, DeviceInfos, SystemStatus
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 import homeassistant.util.dt as dt_util
 
+from .arming import ArmingTracker
 from .const import (
+    ARMING_CONFIRMATION_DELAY,
     BRAND,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -24,6 +27,7 @@ from .const import (
     READ_ATTEMPT_TIMEOUTS,
     READ_RETRY_BUDGET,
     READ_RETRY_PAUSES,
+    STATUS_TEMPO_GROUP,
 )
 
 if TYPE_CHECKING:
@@ -59,9 +63,90 @@ class DiagralDataUpdateCoordinator(DataUpdateCoordinator):
         self.api = api
         self.last_success: datetime | None = None
         self.last_error: str | None = None
+        self.last_error_status: int | None = None
         self.webhook_status: str | None = None
         self.last_webhook: datetime | None = None
         self.cloud_reachable: bool | None = None
+        self.arming = ArmingTracker()
+        self._arming_refresh_cancel: CALLBACK_TYPE | None = None
+        self._arming_refresh_deadline: datetime | None = None
+
+    @callback
+    def async_record_command_result(
+        self,
+        status: SystemStatus,
+        *,
+        started_at: datetime,
+        target_groups: list[int] | None = None,
+        clear_arming: bool = False,
+        previous_status: SystemStatus | None = None,
+    ) -> None:
+        """Record an accepted command before publishing its returned status.
+
+        An empty target list means all configured groups. A missing list means
+        the command supplies no exit-delay origin. A second command while already
+        arming cannot prove when the central restarted any group's delay.
+        """
+        config = self.data.get("alarm_config")
+        previous_status = previous_status or self.data.get("system_status")
+        previous_value = getattr(previous_status, "status", "")
+        was_arming = (
+            isinstance(previous_value, str)
+            and previous_value.lower() == STATUS_TEMPO_GROUP
+        )
+        if clear_arming:
+            self.arming.clear()
+        if target_groups == []:
+            target_groups = [
+                group.index
+                for group in getattr(config, "groups", None) or []
+                if type(group.index) is int
+            ]
+        self.arming.observe(
+            status,
+            config,
+            command_started_at=(
+                started_at if target_groups is not None and not was_arming else None
+            ),
+            target_groups=target_groups,
+            previous_status=previous_status,
+        )
+        self._async_schedule_arming_confirmation()
+
+    @callback
+    def _async_schedule_arming_confirmation(self) -> None:
+        """Read once after the estimated exit delay, without retrying a command."""
+        deadline = self.arming.ends_at
+        if deadline == self._arming_refresh_deadline:
+            return
+        if self._arming_refresh_cancel:
+            self._arming_refresh_cancel()
+            self._arming_refresh_cancel = None
+        self._arming_refresh_deadline = deadline
+        if deadline is None:
+            return
+        delay = max(0, (deadline - dt_util.utcnow()).total_seconds())
+        self._arming_refresh_cancel = async_call_later(
+            self.hass,
+            delay + ARMING_CONFIRMATION_DELAY,
+            self._async_arming_confirmation,
+        )
+
+    @callback
+    def _async_arming_confirmation(self, now: datetime) -> None:
+        """Ask the central for confirmation; a zero counter is not confirmation."""
+        self._arming_refresh_cancel = None
+        self.async_update_listeners()
+        self.hass.async_create_task(
+            self.async_request_refresh(), "Confirm Diagral state after exit delay"
+        )
+
+    async def async_shutdown(self) -> None:
+        """Cancel the exit-delay callback when this entry is unloaded."""
+        if self._arming_refresh_cancel:
+            self._arming_refresh_cancel()
+            self._arming_refresh_cancel = None
+        await super().async_shutdown()
 
     @callback
     def async_set_webhook_status(self, status: str) -> None:
@@ -86,17 +171,22 @@ class DiagralDataUpdateCoordinator(DataUpdateCoordinator):
                 updated_data = await self._async_read_with_retries(timeouts)
         except TimeoutError as err:
             self.last_error = type(err).__name__
+            self.last_error_status = None
             raise UpdateFailed("Timeout communicating with API") from err
         except DiagralAPIError as err:
             self.last_error = type(err).__name__
+            self.last_error_status = err.status_code
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
+        if updated_data is None:
+            self.last_error = "ValidationError"
+            self.last_error_status = None
+            raise UpdateFailed("Invalid Diagral response; previous snapshot retained")
         self.last_success = dt_util.utcnow()
         self.last_error = None
-
-        if updated_data is None:
-            _LOGGER.debug("Received invalid data from API, keeping old data")
-            return self.data
+        self.last_error_status = None
+        self.arming.observe(updated_data["system_status"], updated_data["alarm_config"])
+        self._async_schedule_arming_confirmation()
         self.data = updated_data
         await self._update_device_info()
         return updated_data

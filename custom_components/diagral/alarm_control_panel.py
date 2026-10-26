@@ -26,6 +26,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import (
     DiagralConfigEntry,
@@ -154,7 +155,9 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
             AlarmControlPanelEntityFeature.ARM_AWAY
             | AlarmControlPanelEntityFeature.ARM_HOME
         )
-        self._attr_extra_state_attributes: dict[str, Any] = {}
+        self._attr_extra_state_attributes: dict[str, Any] = (
+            coordinator.arming.attributes()
+        )
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -183,6 +186,7 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
             # Update the code requirement
             self._attr_code_arm_required = self._is_code_arm_required()
 
+        self._attr_extra_state_attributes.update(self.coordinator.arming.attributes())
         # Always write state so availability follows the coordinator
         self.async_write_ha_state()
 
@@ -270,12 +274,17 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
         self,
         command: Callable[[], Awaitable[SystemStatus]],
         took_effect: Callable[[SystemStatus], bool],
+        *,
+        arming_groups: list[int] | None = None,
+        clear_arming: bool = False,
     ) -> None:
         """Send a command once and publish the status Diagral returns.
 
         A command whose answer is lost may still have been executed: one status
         read decides, and the command is never resent.
         """
+        started_at = dt_util.utcnow()
+        previous_status = self.coordinator.data.get("system_status")
         try:
             async with asyncio.timeout(COMMAND_TIMEOUT):
                 status = await command()
@@ -293,6 +302,13 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
                 raise HomeAssistantError(
                     translation_domain=DOMAIN, translation_key="command_not_confirmed"
                 ) from err
+        self.coordinator.async_record_command_result(
+            status,
+            started_at=started_at,
+            target_groups=arming_groups,
+            clear_arming=clear_arming,
+            previous_status=previous_status,
+        )
         self.coordinator.async_set_updated_data(
             {**self.coordinator.data, "system_status": status}
         )
@@ -310,7 +326,9 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
         """Send disarm command."""
         self._check_code(AlarmControlPanelState.DISARMED, code)
         await self._async_send_command(
-            self._api.stop_system, lambda status: _status_in(status, STATUS_OFF)
+            self._api.stop_system,
+            lambda status: _status_in(status, STATUS_OFF),
+            clear_arming=True,
         )
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
@@ -319,6 +337,7 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
         await self._async_send_command(
             self._api.start_system,
             lambda status: _status_in(status, *ARMED_STATUSES),
+            arming_groups=[],
         )
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
@@ -334,7 +353,9 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
             group_ids = [group_ids]
         _LOGGER.debug("Arming group(s) %s", group_ids)
         await self._async_send_command(
-            lambda: self._api.activate_group(group_ids), _groups_armed(group_ids)
+            lambda: self._api.activate_group(group_ids),
+            _groups_armed(group_ids),
+            arming_groups=group_ids,
         )
 
     async def action_disarm_groups(self, group_ids: int | list[int]) -> None:
@@ -343,7 +364,9 @@ class DiagralAlarmControlPanel(DiagralEntity, AlarmControlPanelEntity):
             group_ids = [group_ids]
         _LOGGER.debug("Disarming group(s) %s", group_ids)
         await self._async_send_command(
-            lambda: self._api.disable_group(group_ids), _groups_disarmed(group_ids)
+            lambda: self._api.disable_group(group_ids),
+            _groups_disarmed(group_ids),
+            clear_arming=True,
         )
 
     async def action_register_webhook(self) -> None:

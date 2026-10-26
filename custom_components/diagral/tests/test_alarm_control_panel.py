@@ -5,12 +5,14 @@ without making real API calls or instantiating the full entity.
 """
 
 import asyncio
+from datetime import UTC, datetime
 import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.diagral import alarm_control_panel as panel_module
 from custom_components.diagral.alarm_control_panel import DiagralAlarmControlPanel
+from custom_components.diagral.arming import ArmingTracker
 from custom_components.diagral.const import (
     CONF_ALARMPANEL_ACTIONTYPE_CODE,
     CONF_ALARMPANEL_CODE,
@@ -173,6 +175,7 @@ def make_updating_panel(
     """Return a panel whose coordinator reports the given Diagral status."""
     panel = make_panel_mock("never", None, current_state)
     panel.coordinator = MagicMock()
+    panel.coordinator.arming = ArmingTracker()
     panel.coordinator.data = {"system_status": MagicMock(status=status)}
     panel._attr_extra_state_attributes = {"trigger": {"group_id": 1}}
     panel.async_write_ha_state = MagicMock()
@@ -499,6 +502,48 @@ class TestExitDelay:
         assert published_status(panel).status == "TEMPO_GROUP"
         assert panel._get_ha_state(published_status(panel)) == (
             AlarmControlPanelState.ARMING
+        )
+
+    async def test_command_origin_is_captured_before_sending(self):
+        """The countdown origin predates network latency and is not reset at receipt."""
+        panel = make_commanded_panel()
+        panel._api.start_system.return_value = status("TEMPO_GROUP", [1, 2])
+        started = datetime(2026, 10, 26, 12, tzinfo=UTC)
+        with patch.object(panel_module.dt_util, "utcnow", return_value=started):
+            await panel.async_alarm_arm_away()
+        panel.coordinator.async_record_command_result.assert_called_once_with(
+            panel._api.start_system.return_value,
+            started_at=started,
+            target_groups=[],
+            clear_arming=False,
+            previous_status=panel.coordinator.data["system_status"],
+        )
+
+    async def test_refused_command_never_starts_a_countdown(self):
+        """Authentication or validation failure cannot publish a new arming origin."""
+        panel = make_commanded_panel()
+        panel._api.start_system.side_effect = AuthenticationError("Refused")
+        with pytest.raises(HomeAssistantError):
+            await panel.async_alarm_arm_away()
+        panel.coordinator.async_record_command_result.assert_not_called()
+
+    async def test_webhook_poll_before_response_does_not_lose_origin(self):
+        """The pre-command snapshot survives a status refresh while waiting."""
+        panel = make_commanded_panel()
+        previous = panel.coordinator.data["system_status"]
+        returned = status("TEMPO_GROUP", [1, 2])
+
+        async def accept_after_webhook_poll():
+            panel.coordinator.data["system_status"] = returned
+            return returned
+
+        panel._api.start_system.side_effect = accept_after_webhook_poll
+        await panel.async_alarm_arm_away()
+        assert (
+            panel.coordinator.async_record_command_result.call_args.kwargs[
+                "previous_status"
+            ]
+            is previous
         )
 
     @pytest.mark.parametrize(
