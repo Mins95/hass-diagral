@@ -201,3 +201,7 @@ The time of the last Diagral event received, whatever its type. Disabled by defa
 ## Diagral cloud - Details
 
 Connected while the last refresh from the Diagral cloud succeeded. When Diagral does not answer, after the retries described above, the other entities become unavailable while this one switches to disconnected. Use it in an automation to be warned of a Diagral outage.
+
+## Optional dashboard example
+
+The [dashboard example](https://github.com/mguyard/hass-diagral/tree/dev/examples/dashboard) combines native alarm controls with a read-only overview of all reported faults, groups and peripheral health. It is an opt-in French-language example, not installed automatically. Its countdown uses the API-derived delay and remains explicitly estimated until the central confirms its state. The example includes synthetic entity mappings, setup instructions and offline tests.

@@ -1,0 +1,21 @@
+{
+  "alarm_entity": "alarm_control_panel.fake_central",
+  "anomalies_entity": "sensor.fake_anomalies",
+  "arming_end_entity": "sensor.fake_arming_ends_at",
+  "stale_after_seconds": 600,
+  "group_entities": [
+    {"entity": "sensor.fake_group_1", "name": "Groupe 1"},
+    {"entity": "sensor.fake_group_2", "name": "Groupe 2"}
+  ],
+  "equipment_entities": [
+    "sensor.fake_detector_information",
+    "binary_sensor.fake_detector_problem",
+    "binary_sensor.fake_detector_inhibited"
+  ],
+  "communication_entities": [
+    "sensor.fake_communication_status",
+    "binary_sensor.fake_cloud_connection",
+    "binary_sensor.fake_cloud_reachable",
+    "sensor.fake_webhook"
+  ]
+}
