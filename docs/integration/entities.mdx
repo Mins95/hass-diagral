@@ -9,6 +9,46 @@ nextTitle: Webhook
 
 ## List of entities
 
+The local enhancement build also exposes the entities below. Existing entity keys and IDs are preserved.
+
+| Entity | Description |
+| --- | --- |
+| Fault details | Readable summary; complete faults remain in the `faults` attribute. |
+| Fault count | Number of individual faults, without overwriting multiple faults on the same device. |
+| Devices with faults | Number of affected devices, identified by device family and index. |
+| Estimated arming end | UTC timestamp from an accepted HA command and the selected groups' configured exit delay; unknown when the start was not observed. |
+| Configured exit delay | Maximum configured exit delay among selected groups; no fixed default. Attributes list all group delays. |
+| Configured entry delay | Maximum configured entry delay among selected groups, with every individual group delay in attributes. |
+| Group status | One enum sensor per group: armed, disarmed, arming or unknown. |
+| Last successful read | Timestamp retained during an outage. |
+| Communication diagnostic | Connected, cloud unavailable, refused authentication/PIN, clock mismatch, timeout, network failure, invalid response or old data. |
+| Configured equipment | Number of devices reported by the configuration. |
+| Equipment information | One child device per equipment family and index, with group, reference, type, video capability and reported firmwares. A camera declaration does not imply a working video stream. |
+| Equipment faults | Binary problem sensor combining configuration flags and the anomalies response. Unknown information stays unknown. |
+| Equipment inhibited | Read-only indication that the equipment has been neutralised. |
+| Equipment power supply fault | Reported power/battery supply fault; no battery percentage is inferred. |
+| Equipment radio fault | Reported transmission fault; no radio signal strength is inferred. |
+| Equipment mechanical tamper | Reported mechanical tamper fault. |
+| Equipment loop fault | Reported loop fault, when the API supplies the field. |
+| Equipment masking fault | Reported anti-masking fault. |
+| Equipment detector fault | Reported detector fault. |
+| Equipment GSM transmission fault | Reported GSM fault. |
+| Equipment telephone transmission fault | Reported RTC fault. |
+| Equipment Internet transmission fault | Reported ADSL transmission fault. |
+| Equipment out of service | Reported equipment fault. |
+| Equipment main power fault | Reported mains supply fault. |
+| Equipment backup power fault | Reported secondary supply fault. |
+| Equipment transmission fault | Reported default communication-media fault. |
+| Equipment wired tamper | Reported wired tamper fault. |
+
+The original anomalies sensor keeps its existing state semantics and IDs. It gains `faults`, `fault_count`, `affected_device_count`, `summary` and `last_success` attributes. Its legacy details retain every `anomaly_names` entry, while the former `id` and `name` fields are kept for compatibility. A matching configuration flag is not counted again when the anomalies response already describes it; distinct API codes are always retained.
+
+An arming countdown is an estimate from the time HA sent an accepted command. The panel remains `arming` after the estimated deadline until the central confirms the final state. A poll or restart that discovers an arming central does not invent a start time. Disarming cancels the estimate. No per-second API polling is performed.
+
+Child devices retain their identity when renamed or reordered. Reference and firmware updates refresh the device registry without changing a user-assigned name. Detailed fault entities are created only for fields reported by the API; less common ones are disabled by default. Neither live opening/motion states nor battery percentages are fabricated from fault flags.
+
+The local dashboard uses the native alarm-panel card for commands and a separate read-only overview for countdowns and fault details. It marks snapshots older than ten minutes as old data and never describes unavailable data as a confirmed all-clear.
+
 The Diagral integration operates in Hub Mode, meaning that all configurations will be created as devices, and each device will consist of a set of entities.
 
 | Sensor                    | Description                                                                                |

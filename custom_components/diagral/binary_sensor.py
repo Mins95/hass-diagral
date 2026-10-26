@@ -17,6 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import DiagralConfigEntry
 from .const import DOMAIN
 from .coordinator import DiagralDataUpdateCoordinator
+from .device_health import async_setup_device_binary_sensors
 from .entity import DiagralEntity
 
 
@@ -56,6 +57,7 @@ async def async_setup_entry(
         DiagralHealthSensor(coordinator, entry, description)
         for description in (CLOUD_CONNECTION, CLOUD_REACHABLE)
     )
+    await async_setup_device_binary_sensors(hass, entry, async_add_entities)
 
 
 class DiagralHealthSensor(DiagralEntity, BinarySensorEntity):

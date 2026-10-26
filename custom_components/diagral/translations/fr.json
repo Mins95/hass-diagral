@@ -88,6 +88,54 @@
             },
             "cloud_reachable": {
                 "name": "Cloud Diagral joignable"
+            },
+            "equipment_problem": {
+                "name": "Défauts"
+            },
+            "equipment_inhibited": {
+                "name": "Neutralisé"
+            },
+            "equipment_radio_alert": {
+                "name": "Défaut radio"
+            },
+            "equipment_power_supply_alert": {
+                "name": "Défaut d’alimentation / piles"
+            },
+            "equipment_autoprotection_mechanical_alert": {
+                "name": "Autoprotection mécanique"
+            },
+            "equipment_loop_alert": {
+                "name": "Défaut de boucle"
+            },
+            "equipment_mask_alert": {
+                "name": "Défaut de masquage"
+            },
+            "equipment_sensor_alert": {
+                "name": "Défaut du détecteur"
+            },
+            "equipment_media_gsm_alert": {
+                "name": "Défaut de transmission GSM"
+            },
+            "equipment_media_rtc_alert": {
+                "name": "Défaut de transmission RTC"
+            },
+            "equipment_media_adsl_alert": {
+                "name": "Défaut de transmission ADSL"
+            },
+            "equipment_out_of_order_alert": {
+                "name": "Hors service"
+            },
+            "equipment_main_power_supply_alert": {
+                "name": "Défaut d’alimentation principale"
+            },
+            "equipment_secondary_power_supply_alert": {
+                "name": "Défaut d’alimentation de secours"
+            },
+            "equipment_default_media_alert": {
+                "name": "Défaut de transmission"
+            },
+            "equipment_autoprotection_wired_alert": {
+                "name": "Autoprotection filaire"
             }
         },
         "alarm_control_panel": {
@@ -114,6 +162,61 @@
             },
             "last_webhook": {
                 "name": "Dernier webhook"
+            },
+            "equipment_information": {
+                "name": "Informations de l’équipement",
+                "state": {
+                    "configured": "Déclaré"
+                }
+            },
+            "anomaly_summary": {
+                "name": "Détail des anomalies"
+            },
+            "fault_count": {
+                "name": "Nombre de défauts"
+            },
+            "affected_device_count": {
+                "name": "Équipements en défaut"
+            },
+            "arming_ends_at": {
+                "name": "Fin estimée de l’armement"
+            },
+            "exit_delay": {
+                "name": "Temporisation de sortie configurée"
+            },
+            "entry_delay": {
+                "name": "Temporisation d’entrée configurée"
+            },
+            "last_success": {
+                "name": "Dernière lecture réussie"
+            },
+            "communication_state": {
+                "name": "Diagnostic de communication",
+                "state": {
+                    "connected": "Connecté",
+                    "cloud_unavailable": "Cloud Diagral indisponible",
+                    "authentication_failed": "Authentification refusée",
+                    "pin_refused": "Code PIN refusé",
+                    "clock_skew": "Horloge système décalée",
+                    "invalid_response": "Réponse inexploitable",
+                    "timeout": "Délai de réponse dépassé",
+                    "network_error": "Erreur réseau",
+                    "stale": "Informations anciennes",
+                    "api_error": "Erreur de l’API Diagral",
+                    "unknown": "Indéterminé"
+                }
+            },
+            "equipment_count": {
+                "name": "Équipements déclarés"
+            },
+            "group_status": {
+                "name": "{group}",
+                "state": {
+                    "disarmed": "Désarmé",
+                    "arming": "Armement en cours",
+                    "armed": "Armé",
+                    "unknown": "Indéterminé"
+                }
             }
         }
     },

@@ -24,10 +24,14 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_WEBHOOK_ID, P
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
+from .connection import ClockDiagnostics
 from .const import (
     CONF_API_KEY,
     CONF_PIN_CODE,
@@ -75,6 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiagralConfigEntry) -> b
     config_dict = asdict(config)
 
     try:
+        clock_diagnostics = ClockDiagnostics()
         api = DiagralAPI(
             username=config_dict[CONF_USERNAME],
             password=config_dict[CONF_PASSWORD],
@@ -83,10 +88,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiagralConfigEntry) -> b
             secret_key=config_dict[CONF_SECRET_KEY],
             pincode=config_dict[CONF_PIN_CODE],
             request_timeout=DIAGRAL_REQUEST_TIMEOUT,
-            session=async_get_clientsession(hass),
+            session=async_create_clientsession(
+                hass, trace_configs=[clock_diagnostics.trace_config()]
+            ),
             vendor=DIAGRAL_VENDOR,
         )
         coordinator = DiagralDataUpdateCoordinator(hass, entry, api)
+        coordinator.clock_diagnostics = clock_diagnostics
         await coordinator.async_config_entry_first_refresh()
 
         try:

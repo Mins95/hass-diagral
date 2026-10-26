@@ -56,6 +56,25 @@ def make_sensor_mock() -> DiagralSensor:
 class TestUpdateAnomalies:
     """Tests for _update_anomalies()."""
 
+    def test_every_fault_name_is_available_on_the_same_device(self):
+        """The last anomaly must not overwrite every previous fault."""
+        sensor = make_sensor_mock()
+        anomaly = AnomalyDetail(
+            index=1,
+            anomaly_names=[
+                AnomalyName(id=1384, name="lowBattery"),
+                AnomalyName(id=1374, name="Tamper"),
+            ],
+        )
+        sensor._update_anomalies(
+            Anomalies(created_at=None, sensors=[anomaly]), [], EMPTY_DEVICE_LIST
+        )
+        detail = sensor._attr_extra_state_attributes["anomalies"]["sensors"][0]
+        assert detail["anomaly_names"] == [
+            {"id": 1384, "name": "lowBattery"},
+            {"id": 1374, "name": "Tamper"},
+        ]
+
     def test_no_anomalies_sets_value_to_zero(self):
         """None anomalies must set native_value to 0 and clear attributes."""
         sensor = make_sensor_mock()

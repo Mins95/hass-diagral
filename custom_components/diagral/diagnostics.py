@@ -22,6 +22,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import DiagralConfigEntry
+from .connection import ClockDiagnostics, communication_state
 from .const import (
     CONF_SERIAL_ID,
     DIAGNOSTICS_CLOUD_TIMEOUT,
@@ -89,6 +90,12 @@ async def async_get_config_entry_diagnostics(
         "health": {
             # Package metadata is read from disk, never on the event loop
             "pydiagral": await hass.async_add_executor_job(version, "pydiagral"),
+            "communication_state": communication_state(coordinator),
+            "clock": coordinator.clock_diagnostics.as_dict()
+            if isinstance(
+                getattr(coordinator, "clock_diagnostics", None), ClockDiagnostics
+            )
+            else None,
             "cloud": {
                 "connected": coordinator.last_update_success,
                 "last_success": _iso(coordinator.last_success),

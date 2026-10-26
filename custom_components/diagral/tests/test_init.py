@@ -413,8 +413,8 @@ class TestSetupEntry:
             patch("custom_components.diagral.asdict", return_value=MagicMock()),
             patch("custom_components.diagral.DiagralAPI", api_cls),
             patch(
-                "custom_components.diagral.async_get_clientsession",
-                lambda given: given.http_session,
+                "custom_components.diagral.async_create_clientsession",
+                lambda given, **kwargs: given.http_session,
             ),
             pytest.raises(ConfigEntryNotReady),
         ):
@@ -585,7 +585,7 @@ class TestSetupReportsWebhookFailure:
             patch("custom_components.diagral.asdict", return_value=MagicMock()),
             patch("custom_components.diagral.DiagralAPI", api_cls),
             patch("custom_components.diagral.DiagralDataUpdateCoordinator") as coord,
-            patch("custom_components.diagral.async_get_clientsession"),
+            patch("custom_components.diagral.async_create_clientsession"),
             patch(
                 "custom_components.diagral.register_webhook",
                 AsyncMock(side_effect=WebhookUnavailable(reason)),

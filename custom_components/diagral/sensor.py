@@ -29,7 +29,11 @@ import homeassistant.util.dt as dt_util
 from . import DiagralConfigEntry
 from .const import DOMAIN, WEBHOOK_STATUSES
 from .coordinator import DiagralDataUpdateCoordinator
+from .device_sensor import async_setup_device_sensors
 from .entity import DiagralEntity
+from .faults import build_faults, fault_summary
+from .group_sensor import async_setup_group_sensors
+from .overview import async_setup_overview_sensors
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,6 +103,9 @@ async def async_setup_entry(
         DiagralHealthSensor(coordinator, description, entry)
         for description in HEALTH_SENSORS
     )
+    await async_setup_overview_sensors(hass, entry, async_add_entities)
+    await async_setup_group_sensors(hass, entry, async_add_entities)
+    await async_setup_device_sensors(hass, entry, async_add_entities)
 
 
 class DiagralHealthSensor(DiagralEntity, SensorEntity):
@@ -191,6 +198,22 @@ class DiagralSensor(DiagralEntity, SensorEntity):
 
         if self.entity_description.key == "anomalies":
             self._update_anomalies(anomalies, groups, devices_infos)
+            language = getattr(
+                getattr(getattr(self, "hass", None), "config", None), "language", "en"
+            )
+            language = language if isinstance(language, str) else "en"
+            faults = build_faults(
+                anomalies, alarm_config, devices=devices_infos, language=language
+            )
+            last_success = self.coordinator.last_success
+            self._attr_extra_state_attributes.update(
+                faults=faults,
+                fault_count=sum(len(item["faults"]) for item in faults),
+                affected_device_count=len(faults),
+                summary=fault_summary(faults, language),
+                last_success=last_success.isoformat() if last_success else None,
+                updated_at=last_success.isoformat() if last_success else None,
+            )
         if self.entity_description.key == "active_groups":
             self._update_active_groups(system_status, groups, alarm_config)
 
@@ -277,7 +300,12 @@ class DiagralSensor(DiagralEntity, SensorEntity):
                     # Flatten anomaly names directly into the details
                     for detail in details:
                         if "anomaly_names" in detail:
-                            for anomaly in detail.pop("anomaly_names"):
+                            names = detail.pop("anomaly_names")
+                            detail["anomaly_names"] = [
+                                {"id": anomaly.id, "name": anomaly.name}
+                                for anomaly in names
+                            ]
+                            for anomaly in names:
                                 detail.update(
                                     {
                                         key: value

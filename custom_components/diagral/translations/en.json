@@ -88,6 +88,54 @@
             },
             "cloud_reachable": {
                 "name": "Diagral cloud reachable"
+            },
+            "equipment_problem": {
+                "name": "Faults"
+            },
+            "equipment_inhibited": {
+                "name": "Inhibited"
+            },
+            "equipment_radio_alert": {
+                "name": "Radio fault"
+            },
+            "equipment_power_supply_alert": {
+                "name": "Power supply fault"
+            },
+            "equipment_autoprotection_mechanical_alert": {
+                "name": "Mechanical tamper"
+            },
+            "equipment_loop_alert": {
+                "name": "Loop fault"
+            },
+            "equipment_mask_alert": {
+                "name": "Masking fault"
+            },
+            "equipment_sensor_alert": {
+                "name": "Detector fault"
+            },
+            "equipment_media_gsm_alert": {
+                "name": "GSM communication fault"
+            },
+            "equipment_media_rtc_alert": {
+                "name": "PSTN communication fault"
+            },
+            "equipment_media_adsl_alert": {
+                "name": "ADSL communication fault"
+            },
+            "equipment_out_of_order_alert": {
+                "name": "Out of order"
+            },
+            "equipment_main_power_supply_alert": {
+                "name": "Main power supply fault"
+            },
+            "equipment_secondary_power_supply_alert": {
+                "name": "Backup power supply fault"
+            },
+            "equipment_default_media_alert": {
+                "name": "Communication fault"
+            },
+            "equipment_autoprotection_wired_alert": {
+                "name": "Wired tamper"
             }
         },
         "alarm_control_panel": {
@@ -114,6 +162,61 @@
             },
             "last_webhook": {
                 "name": "Last webhook"
+            },
+            "equipment_information": {
+                "name": "Equipment information",
+                "state": {
+                    "configured": "Configured"
+                }
+            },
+            "anomaly_summary": {
+                "name": "Fault details"
+            },
+            "fault_count": {
+                "name": "Fault count"
+            },
+            "affected_device_count": {
+                "name": "Devices with faults"
+            },
+            "arming_ends_at": {
+                "name": "Estimated arming end"
+            },
+            "exit_delay": {
+                "name": "Configured exit delay"
+            },
+            "entry_delay": {
+                "name": "Configured entry delay"
+            },
+            "last_success": {
+                "name": "Last successful read"
+            },
+            "communication_state": {
+                "name": "Communication diagnostic",
+                "state": {
+                    "connected": "Connected",
+                    "cloud_unavailable": "Diagral cloud unavailable",
+                    "authentication_failed": "Authentication refused",
+                    "pin_refused": "PIN refused",
+                    "clock_skew": "System clock mismatch",
+                    "invalid_response": "Invalid response",
+                    "timeout": "Request timed out",
+                    "network_error": "Network error",
+                    "stale": "Old data",
+                    "api_error": "Diagral API error",
+                    "unknown": "Unknown"
+                }
+            },
+            "equipment_count": {
+                "name": "Configured equipment"
+            },
+            "group_status": {
+                "name": "{group}",
+                "state": {
+                    "disarmed": "Disarmed",
+                    "arming": "Arming",
+                    "armed": "Armed",
+                    "unknown": "Unknown"
+                }
             }
         }
     },
